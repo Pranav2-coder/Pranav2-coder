@@ -1,67 +1,102 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indoor Planting System - Login and About Us</title>
-    <style>
-        /* ... (Existing CSS) ... */
-    </style>
-    <script>
-        function validateLogin(event) {
-            event.preventDefault();
+#define BLYNK_TEMPLATE_ID "TMPL321Foxr33"
+#define BLYNK_TEMPLATE_NAME "ESP32"
+#define BLYNK_AUTH_TOKEN "wH4hgBuBEiqBgrk0zpCI98wI-ks6PiIl"  
 
-            var username = document.getElementById("username").value.trim();
-            var password = document.getElementById("password").value.trim();
+// Include libraries
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
 
-            // Hardcoded login credentials (for demonstration only - NEVER do this in a real application)
-            if (username === "john.doe" && password === "secret") { 
-                alert("Login successful!");
-                window.location.href = "dashboard.html"; // Redirect to the dashboard
-            } else {
-                alert("Invalid username or password. Please try again.");
-            }
-        }
-    </script>
-</head>
-<body>
-    <div class="background">
-        <div class="content">
-            <h1>Welcome to Indoor Planting System</h1>
+// LCD settings
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-            <div class="login-container">
-                <h2>Login</h2>
-                <form onsubmit="validateLogin(event)">
-                    <input type="text" id="username" placeholder="Username" required>
-                    <input type="password" id="password" placeholder="Password" required>
-                    <button type="submit">Login</button>
-                </form>
-                <p class="signup-link">Don't have an account? <a href="#">Sign up</a></p>
-            </div>
+// DHT11 settings
+#define DHTPIN 4
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
 
-            <div class="about-section">
-                <h2>About Indoor Planting System</h2>
-                <p>Our Indoor Planting System is designed to help you cultivate thriving indoor gardens, regardless of your experience level. We provide the tools and resources you need to create a lush, green oasis in your home or office.</p>
+// Soil moisture settings
+#define SOIL_PIN 34
 
-                <h3>Our Mission</h3>
-                <p>To make indoor gardening accessible and enjoyable for everyone, fostering a deeper connection with nature and promoting the benefits of indoor plants.</p>
+// LED settings
+#define LED_PIN 2 // GPIO2 for the built-in LED on many ESP32 boards
 
-                <h3>What We Offer</h3>
-                <ul>
-                    <li><strong>Plant Selection Guide:</strong> Personalized recommendations based on your environment and preferences.</li>
-                    <li><strong>Care Guides:</strong> Detailed instructions on watering, lighting, fertilizing, and pruning for various plant species.</li>
-                    <li><strong>Troubleshooting Tips:</strong> Solutions to common indoor plant problems, such as pests, diseases, and nutrient deficiencies.</li>
-                    <li><strong>Community Forum:</strong> Connect with fellow indoor gardeners, share tips, and ask questions.</li>
-                    <li><strong>Smart Monitoring Tools (Coming Soon):</strong> Integration with sensors to monitor plant health and automate care.</li>
-                    <li><strong>Curated Plant and Supply Shop:</strong> Access to high-quality plants, pots, soil, and other essential supplies.</li>
-                </ul>
+// Wi-Fi credentials
+char ssid[] = "SCET";                  // Replace with your Wi-Fi SSID
+char pass[] = "SCET2024";              // Replace with your Wi-Fi Password
 
-                <h3>Why Choose Our Indoor Planting System?</h3>
-                <p>We believe that everyone can experience the joy of indoor gardening. Our system simplifies the process, providing you with the knowledge and support you need to succeed. Whether you're a beginner or an experienced gardener, we're here to help you create a beautiful and thriving indoor garden.</p>
+// Function to control LED
+BLYNK_WRITE(V4) { // V3 is the virtual pin assigned to the LED button in Blynk
+  int ledState = param.asInt(); // Get the value from Blynk app (0 or 1)
+  digitalWrite(LED_PIN, ledState); // Set LED state
+}
 
-                <p>Start your indoor gardening journey today!</p>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+void setup() {
+  // Initialize serial communication
+  Serial.begin(115200);
+
+  // Initialize DHT sensor
+  dht.begin();
+
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.print("Connecting WiFi");
+
+  // Initialize LED
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW); // Start with LED off
+
+  // Connect to Wi-Fi and Blynk
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  lcd.clear();
+  lcd.print("Blynk Connected");
+  delay(2000);
+  lcd.clear();
+}
+
+void loop() {
+  // Run Blynk
+  Blynk.run();
+
+  // Read DHT11 data
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+
+  // Read soil moisture data
+  int soilValue = analogRead(SOIL_PIN);
+  int soilPercentage = map(soilValue, 4095, 0, 0, 100);
+
+  // Check for DHT errors
+  if (!isnan(temperature) && !isnan(humidity)) {
+    // Display data on LCD
+    lcd.setCursor(0, 0);
+    lcd.print("Temp: ");
+    lcd.print(temperature);
+    lcd.print((char)223);
+    lcd.print("C");
+    lcd.setCursor(0, 1);
+    lcd.print("Hum: ");
+    lcd.print(humidity);
+    lcd.print("%");
+
+    // Send data to Blynk
+    Blynk.virtualWrite(V1, temperature);    // Temperature
+    Blynk.virtualWrite(V2, humidity);       // Humidity
+    Blynk.virtualWrite(V0, soilPercentage); // Soil Moisture
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Sensor Error!");
+  }
+
+  delay(2000);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Soil: ");
+  lcd.print(soilPercentage);
+  lcd.print("%");
+  delay(2000);
+}
